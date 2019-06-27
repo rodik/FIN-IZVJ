@@ -3,8 +3,9 @@ options(stringsAsFactors = FALSE)
 library(tidyverse)
 library(lubridate)
 library(jsonlite)
+library(openxlsx)
 
-Get_Data_From_DIP <- function(){
+Get_Data_From_DIP <- function(dana = 7){
     popis_obveznika_json_url <- "https://www.izbori.hr/eup2019/financ/data/obveznik.json"
     # procitaj json
     sif_obveznici <- fromJSON(popis_obveznika_json_url) 
@@ -14,9 +15,9 @@ Get_Data_From_DIP <- function(){
         naziv = label
     )
     
-    dp_template_url <- "https://www.izbori.hr/eup2019/financ/data/#obveznik_id#/IZ-DP_7_dana.json"
-    tp_template_url <- "https://www.izbori.hr/eup2019/financ/data/#obveznik_id#/IZ-TP_7_dana.json"
-    mo_template_url <- "https://www.izbori.hr/eup2019/financ/data/#obveznik_id#/IZ-MO_7_dana.json"
+    dp_template_url <- paste0("https://www.izbori.hr/eup2019/financ/data/#obveznik_id#/IZ-DP_",dana,"_dana.json")
+    tp_template_url <- paste0("https://www.izbori.hr/eup2019/financ/data/#obveznik_id#/IZ-TP_",dana,"_dana.json")
+    mo_template_url <- paste0("https://www.izbori.hr/eup2019/financ/data/#obveznik_id#/IZ-MO_",dana,"_dana.json")
     
     dp_report_list <- list()
     tp_report_list <- list()
@@ -33,20 +34,31 @@ Get_Data_From_DIP <- function(){
         tp_url <- str_replace(string = tp_template_url, pattern = '#obveznik_id#', o$obveznik_id)
         mo_url <- str_replace(string = mo_template_url, pattern = '#obveznik_id#', o$obveznik_id)
         
-        # get data
-        dp_data <- fromJSON(dp_url)
-        tp_data <- fromJSON(tp_url)
-        mo_data <- fromJSON(mo_url)
+        tryCatch({
+            
+            # get data
+            dp_data <- fromJSON(dp_url)
+            tp_data <- fromJSON(tp_url)
+            mo_data <- fromJSON(mo_url)
+            
+            # add obveznik_id to list
+            dp_data$obveznik_id <- o$obveznik_id
+            tp_data$obveznik_id <- o$obveznik_id
+            mo_data$obveznik_id <- o$obveznik_id
+            
+            # add to global list
+            dp_report_list[[i]] <- dp_data
+            tp_report_list[[i]] <- tp_data
+            mo_report_list[[i]] <- mo_data
+            
+        }, warning = function(warning_condition) {
+            print(warning_condition)
+        }, error = function(error_condition) {
+            print(error_condition)
+        }, finally={
+            # cleanup-code
+        })
         
-        # add obveznik_id to list
-        dp_data$obveznik_id <- o$obveznik_id
-        tp_data$obveznik_id <- o$obveznik_id
-        mo_data$obveznik_id <- o$obveznik_id
-        
-        # add to global list
-        dp_report_list[[i]] <- dp_data
-        tp_report_list[[i]] <- tp_data
-        mo_report_list[[i]] <- mo_data
     }
     
     return(list(
@@ -154,7 +166,26 @@ Convert_All_Strings_UTF8 <- function(df){
 
 spremiCSV <- function(df, fileName, encoding="UTF-8", sep = ';', na ='', row.names = FALSE){
     con<-file(fileName, encoding=encoding)
-    # KORISTITI WRITE TABLE
+    
     write.table(df, file=con, na=na, sep = sep, row.names = row.names, qmethod = "double" )
-    # close.connection(con)
+}
+
+spremiXLSX <- function(data, fileName){
+    if (is.data.frame(data)) {
+        df <- data
+        wb <- createWorkbook()
+        addWorksheet(wb = wb, sheetName = "Sheet 1", gridLines = FALSE)
+        writeDataTable(wb = wb, sheet = 1, x = df)
+        saveWorkbook(wb, fileName, overwrite = TRUE)
+    }
+    else if (is.list(data)) {
+        wb <- createWorkbook()
+        for(i in 1:length(data)){
+            df <- data[i]
+            df_name <- names(df)
+            addWorksheet(wb = wb, sheetName = df_name, gridLines = FALSE)
+            writeDataTable(wb = wb, sheet = df_name, x = as_data_frame(df[[1]]))
+        }
+        saveWorkbook(wb, fileName, overwrite = TRUE)
+    }
 }

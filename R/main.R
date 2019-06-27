@@ -2,9 +2,9 @@
 
 source('R/Prepare_data.R', encoding = 'UTF-8')
 
-dip_data <- Get_Data_From_DIP()
+dip_data <- Get_Data_From_DIP(dana = 30)
 clean_data <- Obradi_Podatke(dip_data)
-Deploy_To_PowerBI_Dataset(clean_data)
+Deploy_To_PowerBI_Dataset(clean_data, file_name = 'financijski_izvjestaji_30.RDS')
 
 
 ############### PowerBI import script
